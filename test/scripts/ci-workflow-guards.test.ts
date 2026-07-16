@@ -3521,6 +3521,9 @@ describe("ci workflow guards", () => {
     const smokeBuildStep = smokeProfileJob.steps.find(
       (step: WorkflowStep) => step.name === "Build QA smoke runtime",
     );
+    const smokeDockerCacheStep = smokeProfileJob.steps.find(
+      (step: WorkflowStep) => step.name === "Set up Blacksmith Docker layer cache",
+    );
     const smokeRunStep = smokeProfileJob.steps.find(
       (step: WorkflowStep) => step.name === "Run smoke profile part",
     );
@@ -3556,7 +3559,28 @@ describe("ci workflow guards", () => {
     expect(
       smokeProfileJob.strategy.matrix.include.map((entry: { slug: string }) => entry.slug),
     ).toEqual(["profile-1-of-4", "profile-2-of-4", "profile-3-of-4", "profile-4-of-4"]);
+    expect(
+      smokeProfileJob.strategy.matrix.include.filter(
+        (entry: { docker_cache?: boolean }) => entry.docker_cache,
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        lane: "profile-2",
+        slug: "profile-2-of-4",
+        docker_cache: true,
+      }),
+    ]);
     expect(smokeProfileJob["runs-on"]).toContain("blacksmith-16vcpu-ubuntu-2404");
+    expect(smokeDockerCacheStep.uses).toBe(
+      "useblacksmith/setup-docker-builder@ab5c1da94f53f5cd75c1038092aa276dddfccbba",
+    );
+    expect(smokeDockerCacheStep.if).toContain("matrix.docker_cache == true");
+    expect(smokeDockerCacheStep.if).toContain("github.event_name != 'workflow_dispatch'");
+    expect(smokeDockerCacheStep.if).toContain("github.repository == 'openclaw/openclaw'");
+    expect(smokeDockerCacheStep.if).toContain(
+      "github.event.pull_request.head.repo.full_name == 'openclaw/openclaw'",
+    );
+    expect(smokeDockerCacheStep.with["max-cache-size-mb"]).toBe(800000);
     expect(smokeRunStep.run).toContain("createQaSmokeCiPart");
     expect(smokeRunStep.run).toContain("createQaSmokeCiMatrix");
     expect(smokeRunStep.run).toContain("readQaScenarioPack");
